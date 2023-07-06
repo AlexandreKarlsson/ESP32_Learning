@@ -43,27 +43,29 @@ void loop() {
 
   if(isConnected)
   {
-    // Vérifier si des données sont disponibles sur le port série
+    // If UART activate
     if (Serial.available() > 0) 
     {
       blinkLED(1);
       delay(2000);
-      // Lire la commande envoyée depuis le terminal UART
+      // Take all char until \n => Doesn't work well with some of UART terminal (PlatformIO serial terminal is fine)
       String command = Serial.readStringUntil('\n');
-      command.trim(); // Supprimer les espaces blancs au début et à la fin de la commande
-      // Vider le caractère de nouvelle ligne du buffer série
+      // Suppress blank before and after
+      command.trim(); 
+      // Suppress all the line
       while (Serial.available() && Serial.read() != '\n');
-      // Renvoyer les données lues sur l'UART
+      // Send back the command to confirm what is read
       Serial.println("\n Command : " + command);
-      // Vérifier si la commande est "blink x" (où x est un entier)
+      // If it's a blink command
       if (command.startsWith("blink")) 
       {
         blinkLED(2);
         delay(2000);
-        // Extraire la valeur de x de la commande
+        // Extract the integer of the command
         int delayTime;
         String delayString = command.substring(6);
         Serial.print(delayString);
+        // Security if the variable is an integer
         if (delayString.toInt() != 0) 
         {
           delayTime = delayString.toInt();

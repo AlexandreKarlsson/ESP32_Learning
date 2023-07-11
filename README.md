@@ -37,4 +37,5 @@ These two projects allow communication between two ESP32 boards. It uses a clien
 2. WiFi connection, same as the first project.
 3. If it's a flash command, the LED blinks three times before the flash command is executed.
 4. The LED will still flash three times to indicate that it has received a signal.
-*Note: Please be sure to replace the placeholder values in the code with your specific configurations and follow the instructions provided in the respective folders for each project.
+
+*Note: Please be sure to replace the placeholder values in the code with your specific configurations and follow the instructions provided in the respective folders for each project.*

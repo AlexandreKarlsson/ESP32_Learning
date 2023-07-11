@@ -10,7 +10,7 @@ This repository has been created to learn how to use the ESP32. The ultimate goa
 One of the easiest ways to connect the ESP32 to a WiFi network is to use WiFiManager, which will automatically set up a network for you and give the ESP32 the SSID and password for your router. Unfortunately, I was unable to get it to work with this project using PlatformIO from VS Code. However, WiFiManager works with the Arduino IDE and is easy to implement.
 
 ## Connecting WiFi by Tomasz Tarnowski
-The first project simply makes the ESP32's built-in LED flash based on the WiFi connection status. This project is a copy of Tomasz Tarnowski's code, which can be found in this video: YouTube link. We are using the non-blocking approach.
+The first project simply makes the ESP32's built-in LED flash based on the WiFi connection status. This project is a copy of Tomasz Tarnowski's code, which can be found in this video: https://www.youtube.com/watch?v=aAG0bp0Q-y4&t=171s&ab_channel=TomaszTarnowski. We are using the non-blocking approach.
 
 ### How it works
 1. The LED is ON when the ESP32 is connected to WiFi.

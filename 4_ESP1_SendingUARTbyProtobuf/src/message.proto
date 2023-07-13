@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+message Message {
+  enum CommandType {
+    COMMAND = 0;
+    ACK = 1;
+    REQ = 2;
+  }
+
+  uint32 cmdType = 1;
+  uint32 msgSize = 2;
+  uint32 seqNum = 3;
+  bytes payload = 4;
+  uint32 msgEnd = 5;
+}

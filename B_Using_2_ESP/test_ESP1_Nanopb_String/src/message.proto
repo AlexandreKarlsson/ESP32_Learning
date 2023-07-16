@@ -12,7 +12,7 @@ message Message {
   uint32 cmdType = 1;
   uint32 msgSize = 2;
   uint32 seqNum = 3;
-  bytes payload = 4;
+  string payload = 4;
   uint32 msgEnd = 5;
 }
 

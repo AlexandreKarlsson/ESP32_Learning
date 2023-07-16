@@ -53,7 +53,7 @@ extern "C" {
 X(a, STATIC,   SINGULAR, UINT32,   cmdType,           1) \
 X(a, STATIC,   SINGULAR, UINT32,   msgSize,           2) \
 X(a, STATIC,   SINGULAR, UINT32,   seqNum,            3) \
-X(a, CALLBACK, SINGULAR, BYTES,    payload,           4) \
+X(a, CALLBACK, SINGULAR, STRING,   payload,           4) \
 X(a, STATIC,   SINGULAR, UINT32,   msgEnd,            5)
 #define mypackage_Message_CALLBACK pb_default_field_callback
 #define mypackage_Message_DEFAULT NULL

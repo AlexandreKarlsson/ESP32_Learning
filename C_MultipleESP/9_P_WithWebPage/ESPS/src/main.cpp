@@ -2,12 +2,13 @@
 #include <WiFi.h>
 #include <ESPNowW.h>
 #define SERVER_PORT 9999
-//#include "indicator.h"
 #include "message.pb.h"
 #include <pb_encode.h>
 #include <pb_decode.h>
 #include "pb_tools/pb_tools_msg.h"
 #include "pb_tools/pb_tools_msg.c"
+#include <SPIFFS.h>
+#include <ESPAsyncWebServer.h>
 
 bool isConnected = false;
 bool lightOn = false;
@@ -17,6 +18,8 @@ const unsigned long CONNECTION_RETRY_DELAY = 2000;
 const unsigned long MAX_CONNECTION_ATTEMPTS = 15;
 WiFiServer server(SERVER_PORT);
 WiFiClient client;
+AsyncWebServer webserver(80);
+const int sensor_pin = 34;
 
 void blinkLED(int nbrOfBlink) {
   for (int i = 0; i < nbrOfBlink; i++) {
@@ -46,6 +49,7 @@ struct ClientMessage {
   uint8_t mac[6];
   bool connected;
 };
+ 
 
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   if (status == ESP_NOW_SEND_SUCCESS) {
@@ -58,7 +62,6 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 
 void initWifiManager(){
   ESP_WiFiManager wifiManager;
-  //wifiManager.resetSettings();
   wifiManager.autoConnect("ESPserver");
   Serial.println("Connecté au WiFi!");
   Serial.print("Adresse IP: ");
@@ -71,9 +74,6 @@ void onReceive(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
   //if (data_len == sizeof(ServerMessage)) {
     ClientMessage messageReceived;
     memcpy(&messageReceived, data, sizeof(messageReceived));
-
-    // Connecter au WiFi avec les informations reçues du serveur
-    
     Serial.print("connected : ");
     Serial.println(messageReceived.connected);
     Serial.print("MAC: ");
@@ -89,7 +89,6 @@ void onReceive(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
     strncpy(messageToSend.ssid, WiFi.SSID().c_str(), sizeof(messageToSend.ssid));
     messageToSend.serveradress = WiFi.localIP();
     messageToSend.serverport= SERVER_PORT;
-    // Envoie les informations de connexion au client
     ESPNow.send_message(messageReceived.mac, (uint8_t*)&messageToSend, sizeof(messageToSend));
   //}
 }
@@ -122,24 +121,88 @@ void processCommand(const uint8_t* buffer, size_t bytesRead) {
 
   blinkLED(3);
 }
+void checkSPIFFS(){
+  //----------------------------------------------------SPIFFS
+  if(!SPIFFS.begin())
+  {
+    Serial.println("Error SPIFFS...");
+    return;
+  }
 
-void setup() {
-  Serial.begin(115200);
-  pinMode(LED_BUILTIN, OUTPUT);
-  // Initialiser ESP-NOW
+  File root = SPIFFS.open("/");
+  File file = root.openNextFile();
+
+  while(file)
+  {
+    Serial.print("File: ");
+    Serial.println(file.name());
+    file.close();
+    file = root.openNextFile();
+  }
+}
+void initESPNOW(){
   WiFi.mode(WIFI_MODE_STA);
   WiFi.disconnect();
   ESPNow.init();
   ESPNow.reg_recv_cb(onReceive);
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);
+  checkSPIFFS();
+  initESPNOW();
   blinkLED(3);
+}
+void launchWevServer(){
+  Serial.print("Launch Web Server");
+  //----------------------------------------------------SERVER
+  webserver.on("/", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    request->send(SPIFFS, "/index.html", "text/html");
+  });
+
+  webserver.on("/w3.css", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    request->send(SPIFFS, "/w3.css", "text/css");
+  });
+
+  webserver.on("/script.js", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    request->send(SPIFFS, "/script.js", "text/javascript");
+  });
+
+  webserver.on("/lireLuminosite", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    int val = analogRead(sensor_pin);
+    String luminosite = String(val);
+    request->send(200, "text/plain", luminosite);
+  });
+
+  webserver.on("/on", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    blinkLED(1);
+    request->send(200);
+  });
+
+  webserver.on("/off", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    blinkLED(2);
+    request->send(200);
+  });
+
+  webserver.begin();
+  Serial.println("Serveur actif!");
 }
 
 void checkWifi(){
   if (WiFi.status() == WL_CONNECTED && !isConnected) {
         Serial.println("Connected");
-        delay(2000);
+        delay(500);
         server.begin();
         Serial.println("Starting");
+        launchWevServer();
+
         isConnected = true;
         lightOn = true;
     }
@@ -177,16 +240,15 @@ void checkWifi(){
   } 
   else {
     if (WiFi.status() != WL_CONNECTED) {
-      // La connexion WiFi a été perdue
       Serial.println("WiFi perdu");
       isConnected = false;
-      connectionAttempts = 0;  // Réinitialiser le compteur de tentatives de reconnexion
+      connectionAttempts = 0;
       blinkLEDERROR;
     } 
     else {
-      Serial.println("Connecté");
-      delay(1000);
-      lightOn = true;
+      Serial.println(WiFi.localIP());
+      delay(500);
+      if (!lightOn)lightOn = true;
     }
 
     if (lightOn) {

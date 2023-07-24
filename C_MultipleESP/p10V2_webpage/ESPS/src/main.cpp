@@ -13,13 +13,29 @@
 bool isConnected = false;
 bool lightOn = false;
 unsigned long disconnectedTime = 0;
+unsigned long previousTime = 0;
+const unsigned long interval = 5000;
 unsigned long connectionAttempts = 0;
-const unsigned long CONNECTION_RETRY_DELAY = 2000;
-const unsigned long MAX_CONNECTION_ATTEMPTS = 15;
+const unsigned long CONNECTION_RETRY_DELAY = 5000;
+const unsigned long MAX_CONNECTION_ATTEMPTS = 6;
+int value_esp1=0;
+int value_esp2=0;
 WiFiServer server(SERVER_PORT);
 WiFiClient client;
 AsyncWebServer webserver(80);
 const int sensor_pin = 34;
+
+void serializeIPAddress(const IPAddress& ip, uint8_t* buffer) {
+  for (int i = 0; i < 4; i++) {
+    buffer[i] = ip[i];
+  }
+}
+
+void deserializeIPAddress(const uint8_t* buffer, IPAddress& ip) {
+  for (int i = 0; i < 4; i++) {
+    ip[i] = buffer[i];
+  }
+}
 
 void blinkLED(int nbrOfBlink) {
   for (int i = 0; i < nbrOfBlink; i++) {
@@ -41,7 +57,7 @@ void blinkLEDERROR() {
 struct ServerMessage {
   char ssid[32];
   char password[32];
-  IPAddress serveradress;
+  uint8_t serveradress[4];
   int serverport;
 };
 
@@ -71,54 +87,64 @@ void initWifiManager(){
 
 void onReceive(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
   blinkLED(2);
-  Serial.println("Message from client!");
+  Serial.print("Message from client :");
   //if (data_len == sizeof(ServerMessage)) {
     ClientMessage messageReceived;
     memcpy(&messageReceived, data, sizeof(messageReceived));
-    Serial.print("connected : ");
-    Serial.println(messageReceived.connected);
-    Serial.print("MAC: ");
+    Serial.print("  connected : ");
+    Serial.print(messageReceived.connected);
+    Serial.print("  MAC: ");
     for (int i = 0; i < 6; i++) {
       Serial.print(messageReceived.mac[i], HEX);
       if (i < 5) Serial.print(":");
     }
     Serial.println();
+    ESPNow.init();
     ESPNow.add_peer(messageReceived.mac);
-
+    Serial.println("Peer added");
     ServerMessage messageToSend;
     strncpy(messageToSend.password, WiFi.psk().c_str(), sizeof(messageToSend.password));
     strncpy(messageToSend.ssid, WiFi.SSID().c_str(), sizeof(messageToSend.ssid));
-    messageToSend.serveradress = WiFi.localIP();
+    IPAddress localIP = WiFi.localIP();
+    serializeIPAddress(localIP, messageToSend.serveradress);
     messageToSend.serverport= SERVER_PORT;
+    Serial.println("Message configured");
     ESPNow.send_message(messageReceived.mac, (uint8_t*)&messageToSend, sizeof(messageToSend));
+    Serial.println("Message send");
   //}
 }
 
 void processCommand(const uint8_t* buffer, size_t bytesRead) {
     int value=0;
-    int decodeStatus = decodeMessage_Command(buffer, bytesRead, &value);
-
-    if (decodeStatus == 0) {
-    blinkLED(1);
-    Serial.println(value);
+    int esp = decodeMessage_Command(buffer, bytesRead, &value);
+    switch (esp)
+    {
+    case 1:
+      value_esp1=value;
+      break;
+    case 2:
+      value_esp2=value;
+      break;
+    default:
+      blinkLEDERROR();
+      break;
+    }
 
     // Create a buffer for the serialized message
     uint8_t ackBuffer[256];
     pb_ostream_t stream = pb_ostream_from_buffer(ackBuffer, sizeof(ackBuffer));
     // Create an ACK message
     bool status = get_ACK(&stream, true);
-
+    
     if (status) {
         // Send the serialized message via WiFi
         client.write(ackBuffer, stream.bytes_written);
         client.flush();
-        blinkLED(2);
+        //blinkLED(2);
     } else {
         blinkLEDERROR();
     }
-    } else {
-    blinkLEDERROR();
-  }
+    
 
   blinkLED(3);
 }
@@ -143,6 +169,8 @@ void checkSPIFFS(){
 }
 void initESPNOW(){
   WiFi.mode(WIFI_MODE_STA);
+  
+  //WiFi.mode(WIFI_MODE_AP);
   WiFi.disconnect();
   ESPNow.init();
   ESPNow.reg_recv_cb(onReceive);
@@ -151,9 +179,8 @@ void initESPNOW(){
 void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
-  checkSPIFFS();
   initESPNOW();
-  blinkLED(3);
+  checkSPIFFS();
 }
 void launchWevServer(){
   Serial.print("Launch Web Server");
@@ -180,15 +207,27 @@ void launchWevServer(){
     request->send(200, "text/plain", luminosite);
   });
 
+   webserver.on("/esp1", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    String value = String(value_esp1);
+    request->send(200, "text/plain", value);
+  });
+
+   webserver.on("/esp2", HTTP_GET, [](AsyncWebServerRequest *request)
+  {
+    String value = String(value_esp2);
+    request->send(200, "text/plain", String(value));
+  });
+
   webserver.on("/on", HTTP_GET, [](AsyncWebServerRequest *request)
   {
-    blinkLED(1);
+    //blinkLED(1);
     request->send(200);
   });
 
   webserver.on("/off", HTTP_GET, [](AsyncWebServerRequest *request)
   {
-    blinkLED(2);
+    //blinkLED(2);
     request->send(200);
   });
 
@@ -199,7 +238,6 @@ void launchWevServer(){
 void checkWifi(){
   if (WiFi.status() == WL_CONNECTED && !isConnected) {
         Serial.println("Connected");
-        delay(500);
         server.begin();
         Serial.println("Starting");
         launchWevServer();
@@ -218,9 +256,14 @@ void checkWifi(){
         Serial.print("/");
         Serial.println(MAX_CONNECTION_ATTEMPTS);
         WiFi.reconnect();
+        
+
         disconnectedTime = currentTime;
         connectionAttempts++;
-
+        if (WiFi.SSID()==0)
+        {
+          Serial.println("No SSID register");
+        }
         if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
           Serial.println("Pas de connexion. Lancement d'un portail...");
           WiFi.disconnect();
@@ -247,9 +290,12 @@ void checkWifi(){
       blinkLEDERROR;
     } 
     else {
+      unsigned long currentTime = millis();
+      if (currentTime - previousTime >= interval) {
       Serial.println(WiFi.localIP());
-      delay(500);
       if (!lightOn)lightOn = true;
+      previousTime = currentTime;
+    }
     }
 
     if (lightOn) {
@@ -264,7 +310,6 @@ void loop() {
    if (isConnected) {
         if (!client || !client.connected()) {
             client = server.available();
-            return;
         }
 
         if (client.available()) 
@@ -272,6 +317,7 @@ void loop() {
         // Read the incoming message
         uint8_t buffer[256];
         size_t bytesRead = client.readBytes(buffer, sizeof(buffer));
+        //blinkLED(1);
         processCommand(buffer, bytesRead);
         lightOn = true;
         }

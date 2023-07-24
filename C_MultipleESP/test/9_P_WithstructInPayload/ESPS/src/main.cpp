@@ -6,7 +6,7 @@
 #include <pb_encode.h>
 #include <pb_decode.h>
 #include "pb_tools/pb_tools_msg.h"
-#include "pb_tools/pb_tools_msg.c"
+#include "pb_tools/pb_tools_msg.cpp"
 #include <SPIFFS.h>
 #include <ESPAsyncWebServer.h>
 
@@ -62,7 +62,6 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 
 void initWifiManager(){
   ESP_WiFiManager wifiManager;
-  WiFi.mode(WIFI_MODE_STA);
   wifiManager.autoConnect("ESPserver");
   Serial.println("Connecté au WiFi!");
   Serial.print("Adresse IP: ");
@@ -98,8 +97,11 @@ void processCommand(const uint8_t* buffer, size_t bytesRead) {
     int value=0;
     int decodeStatus = decodeMessage_Command(buffer, bytesRead, &value);
 
-    if (decodeStatus == 0) {
+    if (decodeStatus == 0) Serial.println("ERROR DECODE");
     blinkLED(1);
+    Serial.print("Command: ");
+    Serial.println(decodeStatus);
+    Serial.print("Value: ");
     Serial.println(value);
 
     // Create a buffer for the serialized message
@@ -116,12 +118,7 @@ void processCommand(const uint8_t* buffer, size_t bytesRead) {
     } else {
         blinkLEDERROR();
     }
-    } else {
-    blinkLEDERROR();
-  }
-
-  blinkLED(3);
-}
+    }
 void checkSPIFFS(){
   //----------------------------------------------------SPIFFS
   if(!SPIFFS.begin())

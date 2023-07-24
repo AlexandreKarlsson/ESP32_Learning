@@ -62,7 +62,6 @@ void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
 
 void initWifiManager(){
   ESP_WiFiManager wifiManager;
-  WiFi.mode(WIFI_MODE_STA);
   wifiManager.autoConnect("ESPserver");
   Serial.println("Connecté au WiFi!");
   Serial.print("Adresse IP: ");

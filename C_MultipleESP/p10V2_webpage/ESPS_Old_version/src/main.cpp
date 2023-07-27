@@ -7,10 +7,6 @@
 #include <pb_decode.h>
 #include "pb_tools/pb_tools_msg.h"
 #include "pb_tools/pb_tools_msg.c"
-#include "hardware/indicator.h"
-#include "hardware/indicator.cpp"
-#include "espnow_tools/espnow_tool.h"
-#include "espnow_tools/espnow_tool.cpp"
 #include <SPIFFS.h>
 #include <ESPAsyncWebServer.h>
 
@@ -29,25 +25,69 @@ WiFiClient client;
 AsyncWebServer webserver(80);
 const int sensor_pin = 34;
 
+void serializeIPAddress(const IPAddress& ip, uint8_t* buffer) {
+  for (int i = 0; i < 4; i++) {
+    buffer[i] = ip[i];
+  }
+}
+
+void deserializeIPAddress(const uint8_t* buffer, IPAddress& ip) {
+  for (int i = 0; i < 4; i++) {
+    ip[i] = buffer[i];
+  }
+}
+
+void blinkLED(int nbrOfBlink) {
+  for (int i = 0; i < nbrOfBlink; i++) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(300);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(300);
+  }
+}
+void blinkLEDERROR() {
+  for (int i = 0; i < 10; i++) {
+    digitalWrite(LED_BUILTIN, HIGH);
+    delay(100);
+    digitalWrite(LED_BUILTIN, LOW);
+    delay(100);
+  }
+}
+
+struct ServerMessage {
+  char ssid[32];
+  char password[32];
+  uint8_t serveradress[4];
+  int serverport;
+};
+
+struct ClientMessage {
+  uint8_t mac[6];
+  bool connected;
+};
+ 
+
 void OnDataSent(const uint8_t *mac_addr, esp_now_send_status_t status) {
   if (status == ESP_NOW_SEND_SUCCESS) {
-    Serial.println("ESPNOW send success");
+    Serial.println("Informations de connexion envoyées avec succès à l'ESP client !");
   } else {
-    Serial.println("ERROR sending ESPNOW");
+    Serial.println("Erreur lors de l'envoi des informations de connexion à l'ESP client !");
   }
+  blinkLED(2);
 }
 
 void initWifiManager(){
   ESP_WiFiManager wifiManager;
   WiFi.mode(WIFI_MODE_STA);
   wifiManager.autoConnect("ESPserver");
-  Serial.print("IP address: ");
+  Serial.println("Connecté au WiFi!");
+  Serial.print("Adresse IP: ");
   Serial.println(WiFi.localIP());
 }
 
 void onReceive(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
   blinkLED(2);
-  Serial.print("Message from client");
+  Serial.print("Message from client :");
   //if (data_len == sizeof(ServerMessage)) {
     ClientMessage messageReceived;
     memcpy(&messageReceived, data, sizeof(messageReceived));
@@ -99,15 +139,14 @@ void processCommand(const uint8_t* buffer, size_t bytesRead) {
     if (status) {
         // Send the serialized message via WiFi
         client.write(ackBuffer, stream.bytes_written);
-        //client.flush();
+        client.flush();
         //blinkLED(2);
     } else {
-        Serial.println("ERROR ACK");
         blinkLEDERROR();
     }
     
 
-  //blinkLED(3);
+  blinkLED(3);
 }
 void checkSPIFFS(){
   //----------------------------------------------------SPIFFS
@@ -200,20 +239,25 @@ void checkWifi(){
   if (WiFi.status() == WL_CONNECTED && !isConnected) {
         Serial.println("Connected");
         server.begin();
+        Serial.println("Starting");
         launchWevServer();
+
         isConnected = true;
         lightOn = true;
     }
   if (!isConnected) {
     if (WiFi.status() != WL_CONNECTED) {
       unsigned long currentTime = millis();
-      if (currentTime - disconnectedTime >= CONNECTION_RETRY_DELAY) {
-        Serial.print("connection try :");
+      if (currentTime - disconnectedTime >= (connectionAttempts * CONNECTION_RETRY_DELAY)) {
+
+        Serial.print("Tentative de reconnexion au WiFi :");
+        delay(100);
         Serial.print(connectionAttempts);
         Serial.print("/");
         Serial.println(MAX_CONNECTION_ATTEMPTS);
         WiFi.reconnect();
         
+
         disconnectedTime = currentTime;
         connectionAttempts++;
         if (WiFi.SSID()==0)
@@ -221,7 +265,7 @@ void checkWifi(){
           Serial.println("No SSID register");
         }
         if (connectionAttempts >= MAX_CONNECTION_ATTEMPTS) {
-          Serial.println("No connection. WiFiManager launch");
+          Serial.println("Pas de connexion. Lancement d'un portail...");
           WiFi.disconnect();
           ESP_WiFiManager wifiManager;
           wifiManager.resetSettings();
@@ -230,36 +274,30 @@ void checkWifi(){
         }
       }
     } 
-    else 
-    {
-      // Connection acquired
+    else {
+      // Connexion établie
       isConnected = true;
-      Serial.println("WiFi connected !");
-      Serial.print("IP address: ");
+      Serial.println("WiFi connecté !");
+      Serial.print("Adresse IP: ");
       Serial.println(WiFi.localIP());
     }
   } 
-  else 
-  {
-    if (WiFi.status() != WL_CONNECTED) 
-    {
-      // Connection just lost
-      Serial.println("WiFi lost");
+  else {
+    if (WiFi.status() != WL_CONNECTED) {
+      Serial.println("WiFi perdu");
       isConnected = false;
       connectionAttempts = 0;
       blinkLEDERROR;
     } 
-    else 
-    {
-      // ALL OK : server connected
+    else {
       unsigned long currentTime = millis();
-      if (currentTime - previousTime >= interval) 
-      {
+      if (currentTime - previousTime >= interval) {
       Serial.println(WiFi.localIP());
       if (!lightOn)lightOn = true;
       previousTime = currentTime;
-      }
     }
+    }
+
     if (lightOn) {
       digitalWrite(LED_BUILTIN, HIGH);
       lightOn = false;
@@ -271,19 +309,17 @@ void loop() {
   checkWifi();
    if (isConnected) {
         if (!client || !client.connected()) {
-          Serial.print("x");
-          client = server.available();
+            client = server.available();
         }
 
         if (client.available()) 
         {
-          Serial.print(".");
-          // Read the incoming message
-          uint8_t buffer[256];
-          size_t bytesRead = client.readBytes(buffer, sizeof(buffer));
-          //blinkLED(1);
-          processCommand(buffer, bytesRead);
-          lightOn = true;
+        // Read the incoming message
+        uint8_t buffer[256];
+        size_t bytesRead = client.readBytes(buffer, sizeof(buffer));
+        //blinkLED(1);
+        processCommand(buffer, bytesRead);
+        lightOn = true;
         }
     }
 }

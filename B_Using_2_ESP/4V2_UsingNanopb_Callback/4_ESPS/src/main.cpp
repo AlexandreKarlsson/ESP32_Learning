@@ -11,12 +11,13 @@
 #include "espnow_tools/espnow_tool.h"
 #include "espnow_tools/espnow_tool.cpp"
 
-#define WIFI_SSID "reseauESP"
+#define WIFI_SSID "ESP"
 #define WIFI_PASSWORD "mdp123456789"
 #define SERVER_PORT 9999
 
 WiFiServer server(SERVER_PORT);
 WiFiClient client;
+uint8_t CLIENT_MAC_ADDRESS[] = {0xe0, 0x5a, 0x1b, 0xd3, 0x0a, 0x14};
 bool isConnected = false;
 bool lightOn = false;
 
@@ -40,6 +41,7 @@ void processCommand(const uint8_t* buffer, size_t bytesRead) {
 void onReceive(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
   blinkLED(1);
   Serial.print("Message from client");
+  //if(isConnected){
   //if (data_len == sizeof(ServerMessage)) {
   ClientMessage messageReceived;
   memcpy(&messageReceived, data, sizeof(messageReceived));
@@ -66,6 +68,12 @@ void onReceive(const uint8_t *mac_addr, const uint8_t *data, int data_len) {
   ESPNow.send_message(messageReceived.mac, (uint8_t*)&messageToSend, sizeof(messageToSend));
   Serial.println("Message send");
   //}
+//}
+/*
+else{
+    Serial.println("but not connected");
+}
+*/
 }
 
 
@@ -77,15 +85,21 @@ void initESPNOW(){
 }
 
 void setup() {
-  Serial.begin(115200);
-  pinMode(LED_BUILTIN, OUTPUT);
-  blinkLED(10);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  initESPNOW();
+    initESPNOW();
+    Serial.begin(115200);
+    pinMode(LED_BUILTIN, OUTPUT);
+    //blinkLED(10);
+    //WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  
 }
 
 
+const unsigned long WIFI_RECONNECT_INTERVAL = 5000; // 5 seconds
+unsigned long lastReconnectTime = 0;
+bool isReconnecting = false;
+
 void loop() {
+    delay(1000);
     if (!isConnected && WiFi.status() == WL_CONNECTED) {
         // WiFi is connected for the first time
         Serial.println("Connected");
@@ -96,9 +110,16 @@ void loop() {
   
     if (WiFi.status() != WL_CONNECTED) {
         // WiFi is disconnected
-        blinkLED(1);
-        isConnected = false;
-        lightOn = false;
+        if (!isReconnecting) {
+            Serial.println("Disconnected");
+            lastReconnectTime = millis();
+            isReconnecting = true;
+        }
+
+        if (millis() - lastReconnectTime >= WIFI_RECONNECT_INTERVAL) {
+            WiFi.reconnect();
+            isReconnecting = false;
+        }
         return; // Skip the rest of the loop if not connected
     }
   
@@ -110,7 +131,8 @@ void loop() {
     if (isConnected) {
         if (!client || !client.connected()) {
             client = server.available();
-            return;
+            Serial.print(".");
+            delay(1000);
         }
 
         if (client.available()) 
@@ -124,5 +146,3 @@ void loop() {
         }
     }
 }
-
-

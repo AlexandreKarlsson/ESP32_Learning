@@ -20,7 +20,7 @@ bool isConnected = false;
 bool lightOn = false;
 int serverPort;
 IPAddress serverAdress;
-uint8_t SERVER_MAC_ADDRESS[] = {0xe0, 0x5a, 0x1b, 0xc8, 0x3f, 0x14}; //e0:5a:1b:c8:3f:14
+uint8_t SERVER_MAC_ADDRESS[] = {0xe0, 0x5a, 0x1b, 0xd3, 0x0a, 0x14}; //e0:5a:1b:d3:0a:14
 unsigned long previousTime = 0;
 const unsigned long interval = 5000;
 
@@ -37,8 +37,8 @@ void initESPNOW(){
   WiFi.mode(WIFI_MODE_STA);
   WiFi.disconnect();
   ESPNow.init();
-  ESPNow.add_peer(SERVER_MAC_ADDRESS);
   ESPNow.reg_recv_cb(onReceive);
+  ESPNow.add_peer(SERVER_MAC_ADDRESS);
 }
 
 void sendCommand(uint32_t espNumber, const char* commandName, int32_t value) {
@@ -80,6 +80,7 @@ void setup() {
   Serial.println("Starting");
 }
 void loop() {
+  delay(1000);
   if (WiFi.status() == WL_CONNECTED && !isConnected) {
     Serial.println("Connected");
     lightOn = true;
@@ -96,8 +97,8 @@ void loop() {
     {
     sendESPNOWconfig();
     previousTime = currentTime;
-    Serial.print("MAC Address: ");
-    Serial.println(WiFi.macAddress());
+    //Serial.print("MAC Address: ");
+    //Serial.println(WiFi.macAddress());
     }
   
     return; // Skip the rest of the loop if not connected

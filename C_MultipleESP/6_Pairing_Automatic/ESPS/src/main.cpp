@@ -7,8 +7,8 @@ bool isConnected = false;
 bool lightOn = false;
 unsigned long disconnectedTime = 0;
 unsigned long connectionAttempts = 0;
-const unsigned long CONNECTION_RETRY_DELAY = 2000;
-const unsigned long MAX_CONNECTION_ATTEMPTS = 15;
+const unsigned long CONNECTION_RETRY_DELAY = 1000;
+const unsigned long MAX_CONNECTION_ATTEMPTS = 5;
 
 void blinkLED(int nbrOfBlink) {
   for (int i = 0; i < nbrOfBlink; i++) {
